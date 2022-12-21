@@ -1,0 +1,221 @@
+<html>
+  <head>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r119/three.min.js"></script>
+    <script src="js/dat.gui.min.js"></script>
+    <script src="js/stats.min.js"></script>
+    <script src="js/array.js"></script>
+    <script src="js/cell.js"></script>
+    <script src="js/graph.js"></script>
+    <script src="js/maze.js"></script>
+    <script src="js/mazeGenerator.js"></script>
+    <script src="js/underscore-min.js"></script>
+    <script src="js/OrbitControls.js"></script>
+    <script src="js/inflate.min.js"></script>
+    <script src="js/FBXLoader.js"></script>
+    <style>
+      body {
+        margin: 0;
+        overflow: hidden;
+      }
+    </style>
+  </head>
+  <script>
+    // Se crean las variables goblales
+
+    var renderer;
+    var scene;
+    var camera;
+    var control;
+    var stats;
+
+    ///Inicializa la escena, la cámara y los objetos.
+
+    function init() {
+      /// Creacion de la geometria y el material para el Modelo importado
+
+      const geometry = new THREE.BoxGeometry(100, 10, 100);
+      const material = new THREE.MeshStandardMaterial({
+        color: 0xffffff,
+        map: THREE.ImageUtils.loadTexture("texturas/wood.jpg"),
+        refractionRatio: 0.95,
+      });
+
+      /// creacion de los loaders para importar el modelo FBX
+
+      var mixer;
+      const loader = new THREE.FBXLoader();
+
+      ///Impotacion del modelo
+      loader.load("laberinto.fbx", function (object) {
+        mixer = new THREE.AnimationMixer(object);
+        object.traverse(function (child) {
+          if (child.isMesh) {
+            ///Propiedades del modelo para recibir y producir sombras
+
+            child.castShadow = true;
+            child.receiveShadow = true;
+            child.material = material;
+          }
+        });
+
+        ///Propiedades del modelo importado
+
+        object.scale.x = 0.08;
+        object.scale.y = 0.08;
+        object.scale.z = 0.08;
+
+        object.position.x = -46;
+        object.position.y = 0.08;
+        object.position.z = -52;
+
+        object.rotation.x = 0;
+        object.rotation.y = 0;
+        object.rotation.z = 0;
+        scene.add(object);
+      });
+
+      /// crea una escena que contendrá todos nuestros elementos, como objetos, cámaras y luces.
+      scene = new THREE.Scene();
+
+      /// Se crea el skybox
+
+      /// Creacion del material para el skybox
+      const path1 = "sky/";
+      var geometry1 = new THREE.CubeGeometry(900, 900, 900);
+      var cubeMaterials = [
+        ///Imagen derecha
+        new THREE.MeshBasicMaterial({
+          map: new THREE.TextureLoader().load(path1 + "right.png"),
+          side: THREE.DoubleSide,
+        }),
+        /// Imagen izquierda
+        new THREE.MeshBasicMaterial({
+          map: new THREE.TextureLoader().load(path1 + "left.png"),
+          side: THREE.DoubleSide,
+        }),
+        ///Imagen arriba
+        new THREE.MeshBasicMaterial({
+          map: new THREE.TextureLoader().load(path1 + "top.png"),
+          side: THREE.DoubleSide,
+        }),
+        ///Imagen abajo
+        new THREE.MeshBasicMaterial({
+          map: new THREE.TextureLoader().load(path1 + "bot.png"),
+          side: THREE.DoubleSide,
+        }),
+        ///Imagen adelante
+        new THREE.MeshBasicMaterial({
+          map: new THREE.TextureLoader().load(path1 + "front.png"),
+          side: THREE.DoubleSide,
+        }),
+        ///Imagen atras
+        new THREE.MeshBasicMaterial({
+          map: new THREE.TextureLoader().load(path1 + "back.png"),
+          side: THREE.DoubleSide,
+        }),
+      ];
+
+      /// Creacion del material para el skybox
+      var cubeMaterial = new THREE.MeshFaceMaterial(cubeMaterials);
+      var cube = new THREE.Mesh(geometry1, cubeMaterial);
+      scene.add(cube);
+
+      /// Creacion de una cámara, que define dónde estamos mirando.
+      camera = new THREE.PerspectiveCamera(
+        75,
+        window.innerWidth / window.innerHeight,
+        0.1,
+        1000
+      );
+
+      /// Creacion de un render, establece el color de fondo y el tamaño
+      renderer = new THREE.WebGLRenderer();
+      renderer.setSize(window.innerWidth, window.innerHeight);
+      renderer.shadowMapEnabled = true;
+
+      /// Creacion del material y la geometria del plano
+      var planeGeometry = new THREE.PlaneGeometry(200, 200);
+      const planeMaterial = new THREE.MeshLambertMaterial({
+        color: 0xff6600,
+        map: THREE.ImageUtils.loadTexture("texturas/sand.jpg"),
+        combine: THREE.MixOperation,
+        reflectivity: 0.3,
+      });
+
+      /// Se agregan las variables para que el plano reciva y produzca sombras
+      var plane = new THREE.Mesh(planeGeometry, planeMaterial);
+      plane.receiveShadow = true;
+      plane.castShadow = true;
+
+      /// rotar y posicionar el plano
+      plane.rotation.x = -0.5 * Math.PI;
+      plane.position.y = 0;
+      plane.position.x = -50;
+      plane.position.z = -50;
+
+      scene.add(plane);
+
+      /// Posicion de la camara
+      camera.position.x = 50;
+      camera.position.y = 99;
+      camera.position.z = 100;
+      camera.lookAt(scene.position);
+
+      /// Se agrega la luz para las sombras
+
+      var spotLight1 = new THREE.SpotLight(0xffffff);
+      spotLight1.position.set(40, 100, 80);
+      spotLight1.shadowCameraNear = 20;
+      spotLight1.shadowCameraFar = 50;
+      spotLight1.castShadow = true;
+      scene.add(spotLight1);
+
+      /// Se configura el objeto de control para la interfaz gráfica de usuario de control
+      control = new (function () {
+        this.rotationSpeed = 0.005;
+        this.opacity = 0.3;
+      })();
+
+      /// Se agregan las estadiscas para ver el rendimiento
+      const stats = Stats();
+
+      document.body.appendChild(renderer.domElement);
+      document.body.appendChild(stats.domElement);
+
+      // Se ajustan los controles para mover la camara
+      controls = new THREE.OrbitControls(camera);
+      controls.maxDistance = 300;
+
+      function addControlGui(controlObject) {
+        var gui = new dat.GUI();
+      }
+
+      /// Se llama a la función de renderizado
+      function render() {
+        /// renderizar usando requestAnimationFrame
+        requestAnimationFrame(render);
+
+        ///Se actualizan las funciones que se actualicen constantemente
+
+        stats.update();
+        controls.update();
+        cube.rotation.y += 0.0004;
+        renderer.render(scene, camera);
+      }
+
+      render();
+    }
+
+    /// Se ajusta el tamaño de la ventana
+    function handleResize() {
+      camera.aspect = window.innerWidth / window.innerHeight;
+      camera.updateProjectionMatrix();
+      renderer.setSize(window.innerWidth, window.innerHeight);
+    }
+
+    window.onload = init;
+    window.addEventListener("resize", handleResize, false);
+
+    init();
+  </script>
+</html>
